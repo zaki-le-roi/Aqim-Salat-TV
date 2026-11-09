@@ -13,7 +13,7 @@
     <application
         android:label="Aqim Salat TV"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/tv_icon"
         android:banner="@drawable/tv_banner"
         android:usesCleartextTraffic="false">
         <activity
