@@ -1,0 +1,10 @@
+{
+  "@@locale": "fr",
+  "appTitle": "Aqim Salat TV",
+  "setupRequired": "Configuration requise",
+  "welcomeTitle": "Bienvenue",
+  "welcomeBody": "Choisissez un pays et une ville, puis sélectionnez une mosquée ou continuez avec la ville seule.",
+  "chooseMosque": "Choisir une mosquée",
+  "cityOnly": "Utiliser la ville seule",
+  "settings": "Paramètres"
+}
