@@ -1,0 +1,37 @@
+name: aqim_salat_tv
+description: Global offline-first prayer times and adhan for Android TV and Google TV.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.13.0 <4.0.0"
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: 3.5.0
+  drift: 2.35.4
+  sqlite3_flutter_libs: 0.5.41
+  shared_preferences: 2.5.6
+  adhan_dart: 2.0.1
+  timezone: 0.11.2
+  flutter_timezone: 5.1.1
+  intl: 0.20.3
+  just_audio: 0.10.6
+  http: 1.6.0
+  path: 1.9.1
+  path_provider: 2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+  drift_dev: 2.35.4
+  build_runner: 2.10.4
+
+flutter:
+  uses-material-design: true
+  generate: true
