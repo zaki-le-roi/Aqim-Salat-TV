@@ -8,6 +8,12 @@ import android.provider.Settings;
 
 import androidx.annotation.NonNull;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.List;
+import java.util.Map;
+
 import io.flutter.embedding.android.FlutterActivity;
 import io.flutter.embedding.engine.FlutterEngine;
 import io.flutter.plugin.common.MethodChannel;
@@ -33,7 +39,23 @@ public class MainActivity extends FlutterActivity {
                     }
                     result.success(null);
                 } else if ("schedulePrayerAlarms".equals(call.method)) {
-                    result.error("NOT_IMPLEMENTED", "Alarm scheduling bridge is added in the next implementation stage.", null);
+                    try {
+                        List<Map<String, Object>> entries = call.argument("alarms");
+                        JSONArray alarms = new JSONArray();
+                        if (entries != null) {
+                            for (Map<String, Object> entry : entries) {
+                                alarms.put(new JSONObject(entry));
+                            }
+                        }
+                        result.success(AlarmScheduler.replaceSchedule(this, alarms));
+                    } catch (SecurityException exception) {
+                        result.error("EXACT_ALARM_PERMISSION", exception.getMessage(), null);
+                    } catch (Exception exception) {
+                        result.error("SCHEDULE_FAILED", exception.getMessage(), null);
+                    }
+                } else if ("cancelPrayerAlarms".equals(call.method)) {
+                    AlarmScheduler.cancelStored(this);
+                    result.success(null);
                 } else {
                     result.notImplemented();
                 }
