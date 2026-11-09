@@ -1,11 +1,11 @@
 # Asset licenses
 
-No third-party audio recordings, city database, font binaries, or image assets are bundled in this initial scaffold.
+No third-party audio recordings, city database, font binaries, or image assets are bundled in this stage.
 
-| Asset | File | Source | License | Status |
+| Asset | File / implementation | Source | License | Status |
 |---|---|---|---|---|
-| Temporary alert tone | Not bundled yet | To be generated locally by the reproducible asset script | Original generated tone; no third-party recording | Pending next stage |
-| City database | Not bundled yet | GeoNames or equivalent | GeoNames CC BY 4.0 attribution required | Pending dataset import |
-| Map/mosque metadata | Runtime OSM queries | OpenStreetMap contributors | ODbL 1.0 attribution/share-alike obligations | Runtime data, not bundled |
+| Temporary alert tone | Android `ToneGenerator.TONE_PROP_ACK`, generated at runtime by Android | Android platform API; no external recording | No third-party audio file or recording included | Implemented as a short placeholder only; not a full adhan |
+| City database | Not bundled | Planned GeoNames population-filtered dataset with timezone IDs | GeoNames CC BY 4.0; attribution required | Not implemented |
+| Mosque metadata | Runtime OSM queries planned | OpenStreetMap contributors | ODbL 1.0 attribution/share-alike obligations | Not implemented |
 
-A recording will not be described as public domain or Creative Commons unless its exact item page and license are checked and recorded here.
+No reciter recording is currently included. A future recording must have a verified item URL, creator, exact license, attribution text, and checksum recorded here before it is bundled or offered for download.
