@@ -54,6 +54,10 @@ public class PrayerAudioService extends Service {
     private boolean playBundledAdhan() {
         int resourceId = getResources().getIdentifier(
             "adhan_default", "raw", getPackageName());
+        if (resourceId == 0) {
+            resourceId = getResources().getIdentifier(
+                "aqim_alert_tone", "raw", getPackageName());
+        }
         if (resourceId == 0) return false;
         try {
             AudioAttributes attributes = new AudioAttributes.Builder()
