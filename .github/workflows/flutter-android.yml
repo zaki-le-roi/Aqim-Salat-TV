@@ -21,10 +21,14 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Flutter version
-        run: flutter --version
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
       - name: Resolve packages
         run: flutter pub get
+      - name: Generate Gradle wrapper
+        working-directory: android
+        run: gradle wrapper --gradle-version 8.14.3
       - name: Generate localizations
         run: flutter gen-l10n
       - name: Analyze
