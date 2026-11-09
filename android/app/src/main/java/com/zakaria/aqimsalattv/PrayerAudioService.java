@@ -7,9 +7,11 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.MediaPlayer;
 import android.media.ToneGenerator;
 import android.os.Build;
 import android.os.Handler;
@@ -20,6 +22,7 @@ import android.os.PowerManager;
 public class PrayerAudioService extends Service {
     private static final String CHANNEL_ID = "prayer_adhan";
     private static final int NOTIFICATION_ID = 7101;
+    private MediaPlayer mediaPlayer;
     private ToneGenerator toneGenerator;
     private AudioManager audioManager;
     private AudioFocusRequest focusRequest;
@@ -44,11 +47,47 @@ public class PrayerAudioService extends Service {
         }
         acquireWakeLock();
         requestAudioFocus();
-        // Temporary fallback tone only. Licensed full adhan files are added after verification.
+        if (!playBundledAdhan()) playFallbackTone();
+        return START_NOT_STICKY;
+    }
+
+    private boolean playBundledAdhan() {
+        int resourceId = getResources().getIdentifier(
+            "adhan_default", "raw", getPackageName());
+        if (resourceId == 0) return false;
+        try {
+            AudioAttributes attributes = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build();
+            mediaPlayer = new MediaPlayer();
+            mediaPlayer.setAudioAttributes(attributes);
+            try (AssetFileDescriptor descriptor = getResources().openRawResourceFd(resourceId)) {
+                if (descriptor == null) return false;
+                mediaPlayer.setDataSource(descriptor.getFileDescriptor(),
+                    descriptor.getStartOffset(), descriptor.getLength());
+            }
+            mediaPlayer.setOnCompletionListener(player -> stopSelf());
+            mediaPlayer.setOnErrorListener((player, what, extra) -> {
+                stopSelf();
+                return true;
+            });
+            mediaPlayer.prepare();
+            mediaPlayer.start();
+            return true;
+        } catch (Exception exception) {
+            if (mediaPlayer != null) {
+                mediaPlayer.release();
+                mediaPlayer = null;
+            }
+            return false;
+        }
+    }
+
+    private void playFallbackTone() {
         toneGenerator = new ToneGenerator(AudioManager.STREAM_ALARM, 85);
         toneGenerator.startTone(ToneGenerator.TONE_PROP_ACK, 2500);
         handler.postDelayed(this::stopSelf, 3000);
-        return START_NOT_STICKY;
     }
 
     private void requestAudioFocus() {
@@ -74,7 +113,7 @@ public class PrayerAudioService extends Service {
         if (powerManager != null) {
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK, "AqimSalatTV:Adhan");
-            wakeLock.acquire(10000L);
+            wakeLock.acquire(5 * 60 * 1000L);
         }
     }
 
@@ -109,6 +148,11 @@ public class PrayerAudioService extends Service {
     @Override
     public void onDestroy() {
         handler.removeCallbacksAndMessages(null);
+        if (mediaPlayer != null) {
+            if (mediaPlayer.isPlaying()) mediaPlayer.stop();
+            mediaPlayer.release();
+            mediaPlayer = null;
+        }
         if (toneGenerator != null) {
             toneGenerator.stopTone();
             toneGenerator.release();
