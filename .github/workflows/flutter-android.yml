@@ -26,6 +26,9 @@ jobs:
           gradle-version: "8.14.3"
       - name: Resolve packages
         run: flutter pub get
+      - name: Prepare Android local properties
+        working-directory: android
+        run: printf "flutter.sdk=%s\nsdk.dir=%s\n" "$(dirname "$(dirname "$(command -v flutter)")")" "$ANDROID_SDK_ROOT" > local.properties
       - name: Generate Gradle wrapper
         working-directory: android
         run: gradle wrapper --gradle-version 8.14.3
