@@ -7,55 +7,196 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Create diagnostics directory
+        run: mkdir -p ci-artifacts/logs ci-artifacts/audio
+
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: "3.47.9"
           channel: stable
           cache: true
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.14.3"
-      - name: Verify Flutter and Dart SDK versions
+
+      - name: Record Flutter and Dart versions
+        id: sdk
+        shell: bash
         run: |
-          flutter --version
-          dart --version
+          set -o pipefail
+          flutter --version 2>&1 | tee ci-artifacts/logs/flutter-version.log
+          dart --version 2>&1 | tee ci-artifacts/logs/dart-version.log
+          flutter --version | head -n 1 > ci-artifacts/flutter-version.txt
+          dart --version 2> ci-artifacts/dart-version.txt || true
+
       - name: Resolve packages
-        run: flutter pub get
+        id: pub_get
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter pub get 2>&1 | tee ci-artifacts/logs/flutter-pub-get.log
+
       - name: Prepare Android local properties
+        id: local_properties
         working-directory: android
-        run: printf "flutter.sdk=%s\nsdk.dir=%s\n" "$(dirname "$(dirname "$(command -v flutter)")")" "$ANDROID_SDK_ROOT" > local.properties
+        shell: bash
+        run: |
+          printf "flutter.sdk=%s\nsdk.dir=%s\n" "$(dirname "$(dirname "$(command -v flutter)")")" "$ANDROID_SDK_ROOT" > local.properties
+
       - name: Generate Gradle wrapper
+        id: gradle_wrapper
         working-directory: android
-        run: gradle wrapper --gradle-version 8.14.3
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle wrapper --gradle-version 8.14.3 2>&1 | tee ../ci-artifacts/logs/gradle-wrapper.log
+
       - name: Generate localizations
-        run: flutter gen-l10n
-      - name: Run tests
-        run: flutter test
+        id: l10n
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter gen-l10n 2>&1 | tee ci-artifacts/logs/flutter-gen-l10n.log
+
+      - name: Run Flutter tests
+        id: tests
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter test 2>&1 | tee ci-artifacts/logs/flutter-test.log
+
       - name: Prepare audio assets
+        id: audio
+        continue-on-error: true
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          bash tools/fetch_audio.sh
-      - name: Analyze
-        run: flutter analyze
-      - name: Build Android APK
-        run: flutter build apk --release
-      - name: Report packaged audio files
+          sudo apt-get update 2>&1 | tee ci-artifacts/logs/apt-update.log
+          sudo apt-get install -y ffmpeg 2>&1 | tee ci-artifacts/logs/ffmpeg-install.log
+          set -o pipefail
+          bash tools/fetch_audio.sh 2>&1 | tee ci-artifacts/logs/fetch-audio.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
+            find android/app/src/main/res/raw -maxdepth 1 -type f -print -exec cp -f {} ci-artifacts/audio/ \; || true
+            audio_file="android/app/src/main/res/raw/adhan_default.ogg"
+            [ -f "$audio_file" ] || audio_file="android/app/src/main/res/raw/aqim_alert_tone.ogg"
+            if [ -f "$audio_file" ]; then
+              ffprobe -v error -show_entries format=duration -show_entries stream=codec_name,codec_type,sample_rate,channels -of json "$audio_file" | tee ci-artifacts/audio/ffprobe.json
+              stat -c 'file=%n size_bytes=%s' "$audio_file" | tee ci-artifacts/audio/file-size.txt
+            fi
+          fi
+          exit "$status"
+
+      - name: Analyze Flutter code
+        id: analyze
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter analyze 2>&1 | tee ci-artifacts/logs/flutter-analyze.log
+
+      - name: Build Android release APK
+        id: apk
+        shell: bash
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee ci-artifacts/logs/gradle-release-build.log
+
+      - name: Record APK size
         if: always()
+        shell: bash
         run: |
-          find android/app/src/main/res/raw -maxdepth 1 -type f -printf "%f %s bytes\\n" || true
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [ -f "$apk" ]; then
+            stat -c 'APK=%n SIZE_BYTES=%s SIZE_HUMAN=%k KB' "$apk" | tee ci-artifacts/apk-size.txt
+          else
+            echo "APK_NOT_CREATED" | tee ci-artifacts/apk-size.txt
+          fi
+
+      - name: Upload diagnostics and failure logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqim-salat-ci-diagnostics
+          path: ci-artifacts/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload verified audio output
+        if: always() && steps.audio.outcome == 'success' && hashFiles('ci-artifacts/audio/*.ogg') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqim-salat-audio-output
+          path: |
+            ci-artifacts/audio/*.ogg
+            ci-artifacts/audio/ffprobe.json
+            ci-artifacts/audio/file-size.txt
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload APK
+        if: always() && steps.apk.outcome == 'success' && hashFiles('build/app/outputs/flutter-apk/app-release.apk') != ''
         uses: actions/upload-artifact@v4
         with:
           name: aqim-salat-tv-release
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish CI summary
+        if: always()
+        shell: bash
+        env:
+          SDK_OUTCOME: ${{ steps.sdk.outcome }}
+          PUB_GET_OUTCOME: ${{ steps.pub_get.outcome }}
+          LOCAL_PROPERTIES_OUTCOME: ${{ steps.local_properties.outcome }}
+          GRADLE_WRAPPER_OUTCOME: ${{ steps.gradle_wrapper.outcome }}
+          L10N_OUTCOME: ${{ steps.l10n.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          AUDIO_OUTCOME: ${{ steps.audio.outcome }}
+          ANALYZE_OUTCOME: ${{ steps.analyze.outcome }}
+          APK_OUTCOME: ${{ steps.apk.outcome }}
+        run: |
+          {
+            echo "# Aqim Salat TV — CI report"
+            echo
+            echo "- Flutter: $(cat ci-artifacts/flutter-version.txt 2>/dev/null || echo unavailable)"
+            echo "- Dart: $(tr -d '\n' < ci-artifacts/dart-version.txt 2>/dev/null || echo unavailable)"
+            echo
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| SDK version capture | $SDK_OUTCOME |"
+            echo "| flutter pub get | $PUB_GET_OUTCOME |"
+            echo "| Android local.properties | $LOCAL_PROPERTIES_OUTCOME |"
+            echo "| Gradle wrapper | $GRADLE_WRAPPER_OUTCOME |"
+            echo "| flutter gen-l10n | $L10N_OUTCOME |"
+            echo "| flutter test | $TESTS_OUTCOME |"
+            echo "| fetch_audio.sh + ffprobe | $AUDIO_OUTCOME |"
+            echo "| flutter analyze | $ANALYZE_OUTCOME |"
+            echo "| Release APK build (Gradle) | $APK_OUTCOME |"
+            echo
+            echo "## APK"
+            cat ci-artifacts/apk-size.txt 2>/dev/null || echo "APK size unavailable"
+            echo
+            echo "## Audio verification"
+            if [ -f ci-artifacts/audio/ffprobe.json ]; then
+              cat ci-artifacts/audio/ffprobe.json
+            else
+              echo "No verified audio file was produced."
+            fi
+            echo
+            echo "Diagnostic logs are attached as the aqim-salat-ci-diagnostics artifact."
+          } >> "$GITHUB_STEP_SUMMARY"
