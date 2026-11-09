@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('serializes city wall time without a device offset', () {
-    const alarm = PrayerAlarmSpec(
-      localDateTime: _FixedDateTime(),
+    final alarm = PrayerAlarmSpec(
+      localDateTime: DateTime(2026, 11, 9, 5, 12),
       zoneId: 'Africa/Algiers',
       prayer: 'Fajr',
       mosque: 'Test Mosque',
@@ -12,8 +12,4 @@ void main() {
     expect(alarm.localIso8601, '2026-11-09T05:12:00');
     expect(alarm.toPlatformMap()['zoneId'], 'Africa/Algiers');
   });
-}
-
-class _FixedDateTime extends DateTime {
-  const _FixedDateTime() : super(2026, 11, 9, 5, 12);
 }
